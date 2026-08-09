@@ -5,8 +5,7 @@ const dir = __dirname;
 const parts = [];
 for (let p = 1; p <= 6; p++) {
   parts.push(fs.readFileSync(path.join(dir, "src", "part" + p + ".js"), "utf8"));
-}
-const src = parts.join("\n");
+}const src = parts.join("\n");
 
 const marker = "// ==/UserScript==";
 const headerEnd = src.indexOf(marker);
@@ -100,6 +99,6 @@ out = out
   .replace(/\n{3,}/g, "\n\n");
 
 const final = header + "\n" + out;
-const dest = process.argv[2];
+const dest = process.argv[2] || path.join(dir, "ignis.user.js");
 fs.writeFileSync(dest, final);
 console.log("built:", dest, "bytes:", final.length, "lines:", final.split("\n").length);
