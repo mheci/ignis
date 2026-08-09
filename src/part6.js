@@ -225,20 +225,29 @@
   }
 
   // ─── Boot ──────────────────────────────────────────────────────────────
-  initSettings();
-  purgeCache();
-  registerMenuCommand();
-  registerBodyHandlers();
-  registerPerformanceObserver();
-  installKeyboardShortcuts();
-  installAltHotkeys();
+  function ignisBoot() {
+    $body = $("body");
+    initSettings();
+    purgeCache();
+    registerMenuCommand();
+    registerBodyHandlers();
+    registerPerformanceObserver();
+    installKeyboardShortcuts();
+    installAltHotkeys();
 
-  Router.start();
-  Router.enter();
-  installDomObserver();
-  setTimeout(function () {
-    scanAll();
-  }, 250);
+    Router.start();
+    Router.enter();
+    installDomObserver();
+    setTimeout(function () {
+      scanAll();
+    }, 250);
 
-  logger(NAME, "v" + VERSION, "ready — route:", state.route || location.pathname);
+    logger(NAME, "v" + VERSION, "ready \u2192 route:", state.route || location.pathname);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ignisBoot);
+  } else {
+    ignisBoot();
+  }
 })();

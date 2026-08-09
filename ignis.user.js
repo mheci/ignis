@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name               IGNIS — Instagram Enhancement Suite
-// @version            9.5.1
+// @version            9.5.2
 // @description        IGNIS v9.4: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
 // @author             IGNIS
 // @match              https://*.instagram.com/*
@@ -17,6 +17,7 @@
 // @grant              GM_registerMenuCommand
 // @grant              GM_setValue
 // @grant              GM_unregisterMenuCommand
+// @grant              unsafeWindow
 // @grant              GM_xmlhttpRequest
 // @connect            *
 // @icon               https://www.google.com/s2/favicons?domain=www.instagram.com&sz=32
@@ -24,15 +25,29 @@
 // @compatible         chrome >= 100
 // @compatible         edge >= 100
 // @compatible         firefox >= 100
-// @run-at             document-idle
+// @run-at             document-start
 // ==/UserScript==
 
 (function () {
   "use strict";
 
-  const VERSION = "9.5.1";
+  const VERSION = "9.5.2";
   const NAME = "IGNIS";
   const $ = jQuery;
+
+  var __ignisFocusTarget = (typeof unsafeWindow !== "undefined" && unsafeWindow) || window;
+  var __ignisNativeFocus = null;
+  try {
+    __ignisNativeFocus = __ignisFocusTarget.focus.bind(__ignisFocusTarget);
+    var __ignisGuardedFocus = function () {
+      try {
+        if (!document.hasFocus()) return;
+      } catch (e) {}
+      return __ignisNativeFocus.apply(__ignisFocusTarget, arguments);
+    };
+    window.focus = __ignisGuardedFocus;
+    __ignisFocusTarget.focus = __ignisGuardedFocus;
+  } catch (e) {}
 
   const SETTINGS = [
     ["AUTO_RENAME", "download", "Auto Rename Files", "Auto-renames downloaded files. Right-click the row to edit the template.", true],
@@ -97,7 +112,7 @@
   const resourceCountSelector =
     "*:not([data-pagelet])>*:not([role]):not([data-pagelet])>*>*>*[role]>*>ul[class] li[class]";
   const userIdCache = new Map();
-  const $body = $("body");
+  let $body = $("body");
 
   const state = {
     fileRenameFormat:
@@ -3762,20 +3777,29 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     add("Reload Script", "r", reloadScript);
   }
 
-  initSettings();
-  purgeCache();
-  registerMenuCommand();
-  registerBodyHandlers();
-  registerPerformanceObserver();
-  installKeyboardShortcuts();
-  installAltHotkeys();
+  function ignisBoot() {
+    $body = $("body");
+    initSettings();
+    purgeCache();
+    registerMenuCommand();
+    registerBodyHandlers();
+    registerPerformanceObserver();
+    installKeyboardShortcuts();
+    installAltHotkeys();
 
-  Router.start();
-  Router.enter();
-  installDomObserver();
-  setTimeout(function () {
-    scanAll();
-  }, 250);
+    Router.start();
+    Router.enter();
+    installDomObserver();
+    setTimeout(function () {
+      scanAll();
+    }, 250);
 
-  logger(NAME, "v" + VERSION, "ready — route:", state.route || location.pathname);
+    logger(NAME, "v" + VERSION, "ready \u2192 route:", state.route || location.pathname);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ignisBoot);
+  } else {
+    ignisBoot();
+  }
 })();

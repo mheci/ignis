@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name               IGNIS — Instagram Enhancement Suite
-// @version            9.5.1
+// @version            9.5.2
 // @description        IGNIS v9.4: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
 // @author             IGNIS
 // @match              https://*.instagram.com/*
@@ -17,6 +17,7 @@
 // @grant              GM_registerMenuCommand
 // @grant              GM_setValue
 // @grant              GM_unregisterMenuCommand
+// @grant              unsafeWindow
 // @grant              GM_xmlhttpRequest
 // @connect            *
 // @icon               https://www.google.com/s2/favicons?domain=www.instagram.com&sz=32
@@ -24,7 +25,7 @@
 // @compatible         chrome >= 100
 // @compatible         edge >= 100
 // @compatible         firefox >= 100
-// @run-at             document-idle
+// @run-at             document-start
 // ==/UserScript==
 (function () {
   "use strict";
@@ -37,9 +38,27 @@
      Ignis Render  : UI (download dialog, dashboard, viewer, toasts)
      ============================================================ */
 
-  const VERSION = "9.5.1";
+  const VERSION = "9.5.2";
   const NAME = "IGNIS";
   const $ = jQuery;
+
+  // Neutralize tab-focus stealing: when a media page (reel / image) loads in
+  // a background tab, Instagram's page scripts call window.focus(), which
+  // brings the tab to the front in Firefox. We run at document-start (before
+  // Instagram's JS) and only honor focus() when this tab already has focus.
+  var __ignisFocusTarget = (typeof unsafeWindow !== "undefined" && unsafeWindow) || window;
+  var __ignisNativeFocus = null;
+  try {
+    __ignisNativeFocus = __ignisFocusTarget.focus.bind(__ignisFocusTarget);
+    var __ignisGuardedFocus = function () {
+      try {
+        if (!document.hasFocus()) return;
+      } catch (e) {}
+      return __ignisNativeFocus.apply(__ignisFocusTarget, arguments);
+    };
+    window.focus = __ignisGuardedFocus;
+    __ignisFocusTarget.focus = __ignisGuardedFocus;
+  } catch (e) {}
 
   // ─── Settings catalog [key, category, label, description, default] ─────
   const SETTINGS = [
@@ -105,7 +124,7 @@
   const resourceCountSelector =
     "*:not([data-pagelet])>*:not([role]):not([data-pagelet])>*>*>*[role]>*>ul[class] li[class]";
   const userIdCache = new Map();
-  const $body = $("body");
+  let $body = $("body");
 
   // ─── State ─────────────────────────────────────────────────────────────
   const state = {
