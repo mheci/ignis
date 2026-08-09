@@ -1727,8 +1727,6 @@
     notify(NAME, "Downloaded " + done + " of " + total + " items.");
   }
 
-  
-
   const INTERNAL_CSS = `
 :root{
   --ig-brand:#e1306c;
@@ -1885,7 +1883,6 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
 
   GM_addStyle(INTERNAL_CSS);
 
-
   const ModalStack = {
     modals: [],
     push: function (m) {
@@ -1974,7 +1971,6 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     }, 10);
     return ModalStack.push(api);
   }
-
 
   function buildPostItems(payload, postPath) {
     var res = normalizePostResource(payload.resource);
@@ -2248,7 +2244,6 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     return loaded;
   }
 
-
   function openStoryDialog(payload, type) {
     var reel = payload && payload.data && payload.data.reels_media && payload.data.reels_media[0];
     if (!reel) {
@@ -2304,8 +2299,6 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     };
     await batchDownload(items, meta);
   }
-
-
 
   function showSetting(tab) {
     if (tab) state._igTab = tab;
@@ -2502,7 +2495,6 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
   function showHotkeySetting() {
     showSetting("keyboard");
   }
-
 
   function showDebugDOM() {
     var modal = createModal({ title: "Debug Window", sub: NAME + " v" + VERSION });
