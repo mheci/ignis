@@ -1,11 +1,12 @@
-const fs = require("fs");
+﻿const fs = require("fs");
 const path = require("path");
 
 const dir = __dirname;
 const parts = [];
 for (let p = 1; p <= 6; p++) {
   parts.push(fs.readFileSync(path.join(dir, "src", "part" + p + ".js"), "utf8"));
-}const src = parts.join("\n");
+}
+const src = parts.join("\n").replace(/\r\n/g, "\n");
 
 const marker = "// ==/UserScript==";
 const headerEnd = src.indexOf(marker);
@@ -46,10 +47,16 @@ while (i < n) {
       out += body[i];
       if (body[i] === "\\") {
         i++;
-        if (i < n) { out += body[i]; i++; }
+        if (i < n) {
+          out += body[i];
+          i++;
+        }
         continue;
       }
-      if (body[i] === q) { i++; break; }
+      if (body[i] === q) {
+        i++;
+        break;
+      }
       i++;
     }
     continue;
@@ -61,10 +68,17 @@ while (i < n) {
       if (body[i] === "\\") {
         out += body[i];
         i++;
-        if (i < n) { out += body[i]; i++; }
+        if (i < n) {
+          out += body[i];
+          i++;
+        }
         continue;
       }
-      if (body[i] === "`") { out += body[i]; i++; break; }
+      if (body[i] === "`") {
+        out += body[i];
+        i++;
+        break;
+      }
       out += body[i];
       i++;
     }
@@ -75,7 +89,10 @@ while (i < n) {
       let j = i + 1;
       let inClass = false;
       while (j < n) {
-        if (body[j] === "\\") { j += 2; continue; }
+        if (body[j] === "\\") {
+          j += 2;
+          continue;
+        }
         if (body[j] === "[") inClass = true;
         else if (body[j] === "]") inClass = false;
         else if (body[j] === "/" && !inClass) break;
