@@ -28,8 +28,10 @@ jobs:
       - run: node --check ignis.user.js
       - name: Commit rebuilt userscript
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Canonical identity lock: every commit this automation creates is
+          # authored/committed as mheci, never github-actions[bot].
+          git config user.name "mheci"
+          git config user.email "274998646+mheci@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
             echo "no changes"
@@ -56,6 +58,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Canonical identity lock: annotated tags created here are
+          # tagged as mheci, never github-actions[bot].
+          git config user.name "mheci"
+          git config user.email "274998646+mheci@users.noreply.github.com"
           VER="$(sed -nE 's|^// @version[[:space:]]+([^[:space:]]+).*|\1|p' ignis.user.js | head -n1)"
           echo "artifact @version: ${VER}"
           test -n "${VER}"
