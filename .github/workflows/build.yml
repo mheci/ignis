@@ -77,6 +77,12 @@ jobs:
             fi
             printf '\nBuilt from %s.\n' "$(git rev-parse --short "${GITHUB_SHA}")"
           } > notes.md
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "refs/tags/${TAG}$"; then
+            echo "tag ${TAG} already exists — attaching release to it"
+          else
+            git tag -a "${TAG}" -m "IGNIS ${TAG}" "${GITHUB_SHA}"
+            git push origin "${TAG}"
+          fi
           gh release create "${TAG}" ignis.user.js --repo "$GITHUB_REPOSITORY" --title "IGNIS ${TAG}" --notes-file notes.md --latest
       - name: Verify published channel serves the new version
         run: |
