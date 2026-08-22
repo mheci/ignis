@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name               IGNIS — Instagram Enhancement Suite
-// @version            9.5.2
-// @description        IGNIS v9.4: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
+// @version            9.5.3
+// @description        IGNIS v9.5: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
 // @author             IGNIS
 // @match              https://*.instagram.com/*
 // @downloadURL        https://cdn.jsdelivr.net/gh/mheci/ignis@main/ignis.user.js
@@ -11,9 +11,7 @@
 // @grant              GM_addStyle
 // @grant              GM_download
 // @grant              GM_getValue
-// @grant              GM_info
 // @grant              GM_notification
-// @grant              GM_openInTab
 // @grant              GM_registerMenuCommand
 // @grant              GM_setValue
 // @grant              GM_unregisterMenuCommand
@@ -31,7 +29,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "9.5.2";
+  const VERSION = "9.5.3";
   const NAME = "IGNIS";
   const $ = jQuery;
 
@@ -2127,7 +2125,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       var thumb = item.thumb
         ? '<img class="ignis-thumb" loading="lazy" src="' + esc(item.thumb) + '" alt="">'
         : '<div class="ignis-thumb"></div>';
-      var dims = item.width || item.height ? item.width + "Ã—" + item.height + " Â· " : "";
+      var dims = item.width || item.height ? item.width + "×" + item.height + " · " : "";
       var type =
         '<div class="ignis-type">' +
         (item.isVideo ? "<b>VIDEO</b>" : "<b>IMAGE</b>") +
@@ -2322,7 +2320,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     $(".ignis-modal").remove();
     var modal = createModal({ title: NAME + " Settings", sub: "v" + VERSION });
     var tabs = $('<div class="ignis-tabs">');
-    var search = $('<input class="ignis-search" type="search" placeholder="Search settingsâ€¦">');
+    var search = $('<input class="ignis-search" type="search" placeholder="Search settings…">');
     var list = $("<div>");
     modal.body.append(tabs, search, list);
 
@@ -2379,7 +2377,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
         );
         row.on("click", function () {
           container.data("cap", k[2]);
-          row.find("button").text("Press a keyâ€¦");
+          row.find("button").text("Press a key…");
         });
         container.append(row);
       });
@@ -2394,7 +2392,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       list.empty();
       if (state._igTab === "about") {
         list.append(
-          '<div class="ignis-about"><b>' + NAME + " v" + VERSION + '</b> â€” clean download-focused build.<div class="ignis-rt">' +
+          '<div class="ignis-about"><b>' + NAME + " v" + VERSION + '</b> — clean download-focused build.<div class="ignis-rt">' +
             ["Ignis Core", "Ignis Lens", "Ignis Forge", "Ignis Render"]
               .map(function (r) {
                 return "<span>" + esc(r) + "</span>";
@@ -2534,10 +2532,10 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       })
     );
     var lines = [];
-    lines.push(NAME + " v" + VERSION + " â€” URL: " + location.href);
+    lines.push(NAME + " v" + VERSION + " — URL: " + location.href);
     lines.push("UA: " + navigator.userAgent);
     lines.push("");
-    lines.push("â€” Log â€”");
+    lines.push("— Log —");
     state.GL_logger.slice(-500).forEach(function (entry) {
       lines.push("[" + new Date(entry.time).toISOString() + "] " + entry.content.map(String).join(" "));
     });

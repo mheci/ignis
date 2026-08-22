@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name               IGNIS — Instagram Enhancement Suite
-// @version            9.5.2
-// @description        IGNIS v9.4: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
+// @version            9.5.3
+// @description        IGNIS v9.5: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
 // @author             IGNIS
 // @match              https://*.instagram.com/*
 // @downloadURL        https://cdn.jsdelivr.net/gh/mheci/ignis@main/ignis.user.js
@@ -11,9 +11,7 @@
 // @grant              GM_addStyle
 // @grant              GM_download
 // @grant              GM_getValue
-// @grant              GM_info
 // @grant              GM_notification
-// @grant              GM_openInTab
 // @grant              GM_registerMenuCommand
 // @grant              GM_setValue
 // @grant              GM_unregisterMenuCommand
@@ -38,7 +36,7 @@
      Ignis Render  : UI (download dialog, dashboard, viewer, toasts)
      ============================================================ */
 
-  const VERSION = "9.5.2";
+  const VERSION = "9.5.3";
   const NAME = "IGNIS";
   const $ = jQuery;
 

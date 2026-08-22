@@ -1,5 +1,5 @@
   /* ============================================================
-     Ignis Render â€” UI (download dialog, dashboard, viewer)
+     Ignis Render — UI (download dialog, dashboard, viewer)
      ============================================================ */
 
   const INTERNAL_CSS = `
@@ -158,7 +158,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
 
   GM_addStyle(INTERNAL_CSS);
 
-  // â”€â”€â”€ Modal stack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Modal stack ───────────────────────────────────────────────────────
   const ModalStack = {
     modals: [],
     push: function (m) {
@@ -248,7 +248,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     return ModalStack.push(api);
   }
 
-  // â”€â”€â”€ Post download dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Post download dialog ──────────────────────────────────────────────
   function buildPostItems(payload, postPath) {
     var res = normalizePostResource(payload.resource);
     res.items.forEach(function (it) {
@@ -389,7 +389,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       var thumb = item.thumb
         ? '<img class="ignis-thumb" loading="lazy" src="' + esc(item.thumb) + '" alt="">'
         : '<div class="ignis-thumb"></div>';
-      var dims = item.width || item.height ? item.width + "Ã—" + item.height + " Â· " : "";
+      var dims = item.width || item.height ? item.width + "×" + item.height + " · " : "";
       var type =
         '<div class="ignis-type">' +
         (item.isVideo ? "<b>VIDEO</b>" : "<b>IMAGE</b>") +
@@ -521,7 +521,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     return loaded;
   }
 
-  // â”€â”€â”€ Story / highlight dialogs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Story / highlight dialogs ─────────────────────────────────────────
   function openStoryDialog(payload, type) {
     var reel = payload && payload.data && payload.data.reels_media && payload.data.reels_media[0];
     if (!reel) {
@@ -579,7 +579,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
   }
 
 
-  // â”€â”€â”€ Dashboard settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Dashboard settings ────────────────────────────────────────────────
   function showSetting(tab) {
     if (tab) state._igTab = tab;
     if (!CAT_MAP[state._igTab] && state._igTab !== "about") state._igTab = "download";
@@ -587,7 +587,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     $(".ignis-modal").remove();
     var modal = createModal({ title: NAME + " Settings", sub: "v" + VERSION });
     var tabs = $('<div class="ignis-tabs">');
-    var search = $('<input class="ignis-search" type="search" placeholder="Search settingsâ€¦">');
+    var search = $('<input class="ignis-search" type="search" placeholder="Search settings…">');
     var list = $("<div>");
     modal.body.append(tabs, search, list);
 
@@ -644,7 +644,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
         );
         row.on("click", function () {
           container.data("cap", k[2]);
-          row.find("button").text("Press a keyâ€¦");
+          row.find("button").text("Press a key…");
         });
         container.append(row);
       });
@@ -659,7 +659,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       list.empty();
       if (state._igTab === "about") {
         list.append(
-          '<div class="ignis-about"><b>' + NAME + " v" + VERSION + '</b> â€” clean download-focused build.<div class="ignis-rt">' +
+          '<div class="ignis-about"><b>' + NAME + " v" + VERSION + '</b> — clean download-focused build.<div class="ignis-rt">' +
             ["Ignis Core", "Ignis Lens", "Ignis Forge", "Ignis Render"]
               .map(function (r) {
                 return "<span>" + esc(r) + "</span>";
@@ -776,7 +776,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     showSetting("keyboard");
   }
 
-  // â”€â”€â”€ Debug & feedback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Debug & feedback ──────────────────────────────────────────────────
   function showDebugDOM() {
     var modal = createModal({ title: "Debug Window", sub: NAME + " v" + VERSION });
     var ta = $(
@@ -800,10 +800,10 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       })
     );
     var lines = [];
-    lines.push(NAME + " v" + VERSION + " â€” URL: " + location.href);
+    lines.push(NAME + " v" + VERSION + " — URL: " + location.href);
     lines.push("UA: " + navigator.userAgent);
     lines.push("");
-    lines.push("â€” Log â€”");
+    lines.push("— Log —");
     state.GL_logger.slice(-500).forEach(function (entry) {
       lines.push("[" + new Date(entry.time).toISOString() + "] " + entry.content.map(String).join(" "));
     });
