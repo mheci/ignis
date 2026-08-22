@@ -95,6 +95,8 @@
     }
     var rows = [
       ["S", "Download focused post"],
+      [getPlatformModifierKey() + " + K", "Command palette"],
+      [(isMacOS() ? "\u2318" : "Ctrl") + " + K", "Command palette (browser-safe)"],
       ["Shift + ?", "Show / hide this overlay"],
       [getPlatformModifierKey() + " + W", "Settings"],
       [getPlatformModifierKey() + " + S", "Download story"],
@@ -145,6 +147,124 @@
     });
   }
 
+  // ─── Command palette ───────────────────────────────────────────────────
+  function toggleCommandPalette() {
+    var existing = document.querySelector(".ignis-palette");
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    var actions = [
+      { label: "Open Settings", kw: "settings preferences options", fn: function () { showSetting(); } },
+      { label: "Download Statistics", kw: "stats usage numbers", fn: function () { showSetting("stats"); } },
+      { label: "About " + NAME, kw: "about version info", fn: showAbout },
+      { label: "Debug Window", kw: "debug logs console", fn: showDebugDOM },
+      { label: "Download Focused Post", kw: "save post quick download", fn: quickDownloadFocusedPost },
+      {
+        label: "Download Current Story",
+        kw: "save story download",
+        fn: function () {
+          if (state.route === "story") $(".ignis-sd").first().trigger("click");
+          else Toasts.info("Open a story first.");
+        },
+      },
+      { label: "Download All Stories", kw: "save story all batch", fn: function () { downloadStoriesAll("stories"); } },
+      { label: "Keyboard Shortcuts", kw: "shortcuts help keys overlay", fn: toggleShortcutsHelp },
+      { label: "Close Dialogs", kw: "close modals dismiss", fn: function () { ModalStack.closeTop(); } },
+      { label: "Reload " + NAME, kw: "reload restart refresh", fn: reloadScript },
+    ];
+    var wrap = $('<div class="ignis-palette">');
+    var card = $('<div class="ignis-pal-card">');
+    var inp = $('<input class="ignis-pal-inp" type="text" placeholder="Type a command…" spellcheck="false">');
+    var listBox = $('<div class="ignis-pal-list">');
+    var shown = actions.slice();
+    var active = 0;
+    function paint() {
+      listBox.children(".ignis-pal-it").each(function (i) {
+        $(this).toggleClass("ignis-pal-on", i === active);
+      });
+      var el = listBox.children(".ignis-pal-on")[0];
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    }
+    function render(q) {
+      q = (q || "").trim().toLowerCase();
+      shown = actions.filter(function (a) {
+        return !q || a.label.toLowerCase().indexOf(q) > -1 || a.kw.indexOf(q) > -1;
+      });
+      active = 0;
+      listBox.empty();
+      if (!shown.length) {
+        listBox.append('<div class="ignis-empty" style="padding:18px">No matching commands.</div>');
+        return;
+      }
+      shown.forEach(function (a, i) {
+        var it = $('<div class="ignis-pal-it" role="button" tabindex="-1">').text(a.label);
+        it.on("mouseenter", function () {
+          active = i;
+          paint();
+        });
+        it.on("click", function () {
+          close();
+          a.fn();
+        });
+        listBox.append(it);
+      });
+      paint();
+    }
+    function close() {
+      wrap.remove();
+      $(document).off("keydown.igpal");
+    }
+    inp.on("input", function () {
+      render(inp.val());
+    });
+    wrap.on("mousedown", function (e) {
+      if (e.target === wrap[0]) close();
+    });
+    card.append(inp, listBox);
+    wrap.append(card);
+    $body.append(wrap);
+    $(document).on("keydown.igpal", function (e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (shown.length) {
+          active = (active + 1) % shown.length;
+          paint();
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (shown.length) {
+          active = (active - 1 + shown.length) % shown.length;
+          paint();
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        var a = shown[active];
+        close();
+        if (a) a.fn();
+      }
+    });
+    render("");
+    setTimeout(function () {
+      inp.trigger("focus");
+    }, 0);
+  }
+
+  function installCommandPalette() {
+    document.addEventListener("keydown", function (e) {
+      if (!USER_SETTING.COMMAND_PALETTE) return;
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target && e.target.isContentEditable)) return;
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        toggleCommandPalette();
+      }
+    });
+  }
+
   // ─── Alt hotkeys ───────────────────────────────────────────────────────
   function installAltHotkeys() {
     $(window).on("keydown.igAlt", function (e) {
@@ -161,6 +281,9 @@
       } else if (code === state.debugHotkeyKeyCode) {
         e.preventDefault();
         showDebugDOM();
+      } else if (code === 75) {
+        e.preventDefault();
+        toggleCommandPalette();
       } else if (code === 82) {
         e.preventDefault();
         reloadScript();
@@ -177,11 +300,11 @@
   function reloadScript() {
     clearInterval(state.GL_repeat);
     state.GL_repeat = null;
-    clearInterval(state.postPoll);
+    clearTimeout(state.postPoll);
     state.postPoll = null;
     $body.off(".ignisEvents");
     state.bodyEventsRegistered = false;
-    $(".ignis-bar, .ignis-sb, .ignis-sb-pos, .ignis-pd, .ignis-ksh, .ignis-gd").remove();
+    $(".ignis-bar, .ignis-sb, .ignis-sb-pos, .ignis-pd, .ignis-ksh, .ignis-palette, .ignis-gd").remove();
     $(".ignis-modal").remove();
     $("[data-snig]").removeAttr("data-snig");
     state.pageLoaded = false;
@@ -219,6 +342,7 @@
     }
     add("Settings", "w", showSetting);
     add("Hotkey Settings", "q", showHotkeySetting);
+    add("Command Palette", "k", toggleCommandPalette);
     add("About " + NAME, "i", showAbout);
     add("Debug Window", "z", showDebugDOM);
     add("Reload Script", "r", reloadScript);
@@ -229,11 +353,13 @@
     $body = $("body");
     initSettings();
     purgeCache();
+    Stats.session();
     registerMenuCommand();
     registerBodyHandlers();
     registerPerformanceObserver();
     installKeyboardShortcuts();
     installAltHotkeys();
+    installCommandPalette();
 
     Router.start();
     Router.enter();

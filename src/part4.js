@@ -130,6 +130,14 @@
 .ignis-about a{color:var(--ig-accent);text-decoration:none;font-weight:600}
 .ignis-about .ignis-rt{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .ignis-about .ignis-rt span{background:var(--ig-surface-2);border:1px solid var(--ig-line);border-radius:20px;padding:3px 10px;font:600 11px -apple-system,"Segoe UI",sans-serif;color:var(--ig-text-2)}
+.ignis-stats-h{font:700 11px -apple-system,"Segoe UI",sans-serif;color:var(--ig-text-2);letter-spacing:.6px;text-transform:uppercase;padding:12px 12px 2px}
+.ignis-stat-v{font:600 12px ui-monospace,Menlo,Consolas,monospace;color:var(--ig-text);flex-shrink:0}
+.ignis-palette{position:fixed;inset:0;z-index:2147482600;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
+.ignis-pal-card{width:min(520px,92vw);background:var(--ig-surface);color:var(--ig-text);border-radius:14px;border:1px solid var(--ig-line);box-shadow:var(--ig-shadow);overflow:hidden}
+.ignis-pal-inp{width:100%;box-sizing:border-box;border:none;outline:none;background:transparent;color:var(--ig-text);padding:15px 18px;font:500 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;border-bottom:1px solid var(--ig-line)}
+.ignis-pal-list{max-height:46vh;overflow-y:auto;padding:6px;scrollbar-width:thin}
+.ignis-pal-it{padding:9px 12px;border-radius:9px;font:500 13px -apple-system,"Segoe UI",sans-serif;cursor:pointer}
+.ignis-pal-on{background:var(--ig-surface-2);color:var(--ig-accent)}
 
 .ignis-bar{position:absolute;top:12px;right:12px;z-index:15;display:flex;flex-direction:row-reverse;gap:6px;padding:6px;border-radius:12px;background:rgba(20,20,24,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);box-shadow:0 2px 14px rgba(0,0,0,.25)}
 .ignis-dl,.ignis-nt,.ignis-th,.ignis-da{width:34px;height:34px;border:none;border-radius:9px;background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer;transition:all .12s}
@@ -439,6 +447,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
           new Blob([item.caption], { type: "text/plain;charset=utf-8" }),
           getSaveFileName(item.url, capMeta)
         );
+        Stats.record("caption", 0);
       }
     });
   }
@@ -655,12 +664,77 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       );
     }
 
+    const STAT_TYPE_LABELS = {
+      post: "Posts",
+      photo: "Photos",
+      video: "Videos",
+      reels: "Reels",
+      stories: "Stories",
+      highlights: "Highlights",
+      thumbnail: "Thumbnails",
+      avatar: "Profile Pictures",
+      caption: "Captions",
+      other: "Other",
+    };
+
+    function formatBytes(n) {
+      n = Number(n) || 0;
+      if (n <= 0) return "0 B";
+      var units = ["B", "KB", "MB", "GB", "TB"];
+      var i = 0;
+      while (n >= 1024 && i < units.length - 1) {
+        n /= 1024;
+        i++;
+      }
+      return (i ? n.toFixed(1) : String(Math.round(n))) + " " + units[i];
+    }
+
+    function statRow(label, value) {
+      return (
+        '<div class="ignis-row"><div class="ignis-row-txt"><div class="ignis-row-lb">' +
+        esc(label) +
+        '</div></div><span class="ignis-stat-v">' +
+        esc(value) +
+        "</span></div>"
+      );
+    }
+
+    function buildStatsPanel(onReset) {
+      var s = Stats._load();
+      var panel = $('<div class="ignis-stats">');
+      panel.append(
+        statRow("Total downloads", String(s.items || 0)),
+        statRow("Data saved (approx.)", formatBytes(s.bytes)),
+        statRow("Sessions", String(s.sessions || 0)),
+        statRow("Tracking since", s.firstDay ? new Date(s.firstDay).toLocaleDateString() : "—"),
+        statRow("Last download", s.lastAt ? new Date(s.lastAt).toLocaleString() : "—")
+      );
+      var types = Object.keys(s.byType || {}).sort(function (a, b) {
+        return s.byType[b] - s.byType[a];
+      });
+      if (types.length) {
+        panel.append('<div class="ignis-stats-h">By type</div>');
+        types.forEach(function (t) {
+          panel.append(statRow(STAT_TYPE_LABELS[t] || t, String(s.byType[t])));
+        });
+      }
+      panel.append(
+        '<div style="padding:10px 12px"><button class="ignis-btn ignis-btn-sec">Reset statistics</button></div>'
+      );
+      panel.find("button").on("click", function () {
+        Stats.reset();
+        Toasts.success("Statistics reset.");
+        if (onReset) onReset();
+      });
+      return panel;
+    }
+
     function buildList(filter) {
       list.empty();
       if (state._igTab === "about") {
         list.append(
           '<div class="ignis-about"><b>' + NAME + " v" + VERSION + '</b> — clean download-focused build.<div class="ignis-rt">' +
-            ["Ignis Core", "Ignis Lens", "Ignis Forge", "Ignis Render"]
+            ["Ignis Core", "Ignis Lens", "Ignis Forge", "Ignis Render", "Ignis Pulse"]
               .map(function (r) {
                 return "<span>" + esc(r) + "</span>";
               })
@@ -672,6 +746,11 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       if (state._igTab === "keyboard") {
         renderHotkeyEditor(list);
         return;
+      }
+      if (state._igTab === "stats") {
+        list.append(buildStatsPanel(function () {
+          buildList(filter);
+        }));
       }
       Object.keys(CAT_MAP)
         .filter(function (k) {

@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name               IGNIS — Instagram Enhancement Suite
-// @version            9.5.3
-// @description        IGNIS v9.5: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
+// @version            9.6.0
+// @description        IGNIS v9.6: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) plus local download statistics and a command palette (Ctrl+K).
 // @author             IGNIS
 // @match              https://*.instagram.com/*
-// @downloadURL        https://cdn.jsdelivr.net/gh/mheci/ignis@main/ignis.user.js
-// @updateURL          https://cdn.jsdelivr.net/gh/mheci/ignis@main/ignis.user.js
+// @downloadURL        https://github.com/mheci/Ignis/releases/latest/download/ignis.user.js
+// @updateURL          https://github.com/mheci/Ignis/releases/latest/download/ignis.user.js
 // @require            https://code.jquery.com/jquery-4.0.0.min.js
 // @require            https://cdn.jsdelivr.net/npm/mediabunny@1.34.5/dist/bundles/mediabunny.min.cjs
 // @grant              GM_addStyle
@@ -36,7 +36,7 @@
      Ignis Render  : UI (download dialog, dashboard, viewer, toasts)
      ============================================================ */
 
-  const VERSION = "9.5.3";
+  const VERSION = "9.6.0";
   const NAME = "IGNIS";
   const $ = jQuery;
 
@@ -57,6 +57,39 @@
     window.focus = __ignisGuardedFocus;
     __ignisFocusTarget.focus = __ignisGuardedFocus;
   } catch (e) {}
+
+  // SPA navigation detection without polling: we run at document-start, so
+  // wrapping history.pushState/replaceState here catches every client-side
+  // route change Instagram makes. popstate/hashchange cover the rest. The
+  // handler is injected later by Router.start(); pre-boot navigations are
+  // simply picked up by the initial enter().
+  var __ignisOnNavigate = null;
+  function __ignisHandleNavigate() {
+    if (typeof __ignisOnNavigate !== "function") return;
+    try {
+      __ignisOnNavigate();
+    } catch (e) {
+      /* navigation hook must never break the page */
+    }
+  }
+  try {
+    var __ignisPushState = history.pushState;
+    var __ignisReplaceState = history.replaceState;
+    history.pushState = function () {
+      var r = __ignisPushState.apply(this, arguments);
+      __ignisHandleNavigate();
+      return r;
+    };
+    history.replaceState = function () {
+      var r = __ignisReplaceState.apply(this, arguments);
+      __ignisHandleNavigate();
+      return r;
+    };
+  } catch (e) {
+    /* history frozen (rare hardened sandboxes): boot still scans once */
+  }
+  window.addEventListener("popstate", __ignisHandleNavigate);
+  window.addEventListener("hashchange", __ignisHandleNavigate);
 
   // ─── Settings catalog [key, category, label, description, default] ─────
   const SETTINGS = [
@@ -80,9 +113,11 @@
     ["USE_EXTERNAL_DOWNLOAD_MODE", "download", "Use External Download Mode", "Downloads via the browser download manager (GM_download) instead of in-memory blobs — best for large videos.", false],
     ["KEYBOARD_DOWNLOAD_S", "keyboard", "S Download", "S downloads the focused post.", true],
     ["KEYBOARD_SHORTCUTS_HELP", "keyboard", "Keyboard Shortcuts Help", "Shift+? shows the shortcuts overlay.", true],
+    ["COMMAND_PALETTE", "keyboard", "Command Palette", "Ctrl+K (Cmd+K on Mac, Alt+K anywhere) opens the quick command palette.", true],
+    ["TRACK_DOWNLOAD_STATS", "stats", "Track Download Statistics", "Counts downloads and data volume locally on this device. Nothing ever leaves the browser.", true],
   ];
 
-  const CATS = [["download", "Downloads"], ["keyboard", "Keyboard"]];
+  const CATS = [["download", "Downloads"], ["keyboard", "Keyboard"], ["stats", "Statistics"]];
 
   const USER_SETTING = {};
   const CAT_MAP = {};
@@ -170,6 +205,57 @@
       const raw = this.get(IMAGE_CACHE_KEY, {});
       if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
       return {};
+    },
+  };
+
+  // ─── Download statistics (local-only) ──────────────────────────────────
+  const STATS_KEY = "IGNIS_STATS_V1";
+  const Stats = {
+    _data: null,
+    _blank() {
+      return { v: 1, firstDay: Date.now(), sessions: 0, items: 0, bytes: 0, byType: {}, byDay: {}, lastAt: 0 };
+    },
+    _load() {
+      if (!this._data) {
+        var d = Store.get(STATS_KEY, null);
+        this._data = d && typeof d === "object" && d.v === 1 && d.byType && d.byDay ? d : this._blank();
+      }
+      return this._data;
+    },
+    _save() {
+      try {
+        Store.set(STATS_KEY, this._data);
+      } catch (e) {
+        /* storage full or disabled */
+      }
+    },
+    session() {
+      var d = this._load();
+      d.sessions++;
+      this._save();
+    },
+    record(type, bytes) {
+      if (!USER_SETTING.TRACK_DOWNLOAD_STATS) return;
+      var d = this._load();
+      var t = String(type || "other");
+      d.items++;
+      d.bytes += Number(bytes) || 0;
+      d.byType[t] = (d.byType[t] || 0) + 1;
+      var day = new Date().toISOString().slice(0, 10);
+      d.byDay[day] = (d.byDay[day] || 0) + 1;
+      d.lastAt = Date.now();
+      var days = Object.keys(d.byDay);
+      if (days.length > 90) {
+        days.sort();
+        days.slice(0, days.length - 90).forEach(function (k) {
+          delete d.byDay[k];
+        });
+      }
+      this._save();
+    },
+    reset() {
+      this._data = this._blank();
+      this._save();
     },
   };
 

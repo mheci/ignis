@@ -776,6 +776,26 @@
   }
 
   // ─── Scan dispatcher ───────────────────────────────────────────────────
+  function storyTick() {
+    // Lightweight per-tick work for story/highlight routes: the progress bar
+    // advances via style/width changes (no childList mutations), so a cheap
+    // targeted refresh replaces the old full scanAll interval.
+    var isHl = state.route === "highlights";
+    var btnSel = isHl ? ".ignis-hd" : ".ignis-sd";
+    if (!$(btnSel).length) {
+      if (isHl) attachHighlightButtons();
+      else attachStoryButtons();
+    }
+    var $host = $(btnSel).first().parent();
+    if (!$host.length) return;
+    if ($host.find("video").length) {
+      if (isHl) attachHighlightThumbnailButton();
+      else attachStoryThumbnailButton();
+    }
+    var u = (isHl ? getHighlightsStoryUsername : getStoryUsername)();
+    if (u) setStoryProgressIndexText($host, isHl ? "ignis-hp-pos" : "ignis-sp-pos", u);
+  }
+
   function scanAll() {
     if (!state.pageLoaded) return;
     function safe(fn) {
@@ -812,16 +832,32 @@
     scanScheduled = true;
     setTimeout(function () {
       scanScheduled = false;
+      // The observer doubles as the navigation safety net: any DOM churn on
+      // an unclassified/blacklisted page re-runs the router, so no periodic
+      // watchdog is needed.
+      if (state.firstStarted && (!state.pageLoaded || location.href !== state.currentURL)) {
+        Router.enter();
+        return;
+      }
       scanAll();
     }, 150);
   }
 
   let domObserver = null;
+  let domObserverRoot = null;
   function installDomObserver() {
     if (domObserver) domObserver.disconnect();
     var mount = document.querySelector('div[id^="mount"]') || document.body;
-    domObserver = new MutationObserver(function () {
-      scheduleScan();
+    domObserverRoot = mount;
+    domObserver = new MutationObserver(function (muts) {
+      // Only structural additions need a rescan; removal-only batches
+      // (React teardowns) would otherwise wake the scanner for nothing.
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].addedNodes && muts[i].addedNodes.length) {
+          scheduleScan();
+          return;
+        }
+      }
     });
     domObserver.observe(mount, { childList: true, subtree: true });
   }
@@ -939,6 +975,7 @@
   const Router = {
     enter: function () {
       state.firstStarted = true;
+      state.currentURL = location.href;
       state.route = null;
       var path = location.pathname;
       var blacklist =
@@ -972,52 +1009,81 @@
       }
       state.pageLoaded = true;
       this.cleanup();
+      // Self-heal: Instagram occasionally swaps the mount node, which would
+      // silently orphan the observer. Re-arm it whenever the root died.
+      if (!domObserver || !domObserverRoot || !domObserverRoot.isConnected) {
+        installDomObserver();
+      }
       try {
         scanAll();
       } catch (e) {
         logger("router scan error:", e && e.message ? e.message : e);
       }
       if (state.route === "home" || state.route === "explore" || state.route === "post") {
-        var pollCalls = 0;
-        state.postPoll = setInterval(function () {
-          pollCalls++;
+        // Bounded backoff ladder instead of a 50ms×100 hot poll: the
+        // MutationObserver already covers late renders, these are just
+        // insurance scans while the first paint settles.
+        var follow = [400, 1000, 2500];
+        var fi = 0;
+        function followScan() {
           try {
             scanAll();
           } catch (e) {
             /* isolated */
           }
-          if (pollCalls >= 100 || document.querySelector(".ignis-bar, .ignis-gd")) {
-            clearInterval(state.postPoll);
+          if (fi < follow.length && !document.querySelector(".ignis-bar, .ignis-gd")) {
+            state.postPoll = setTimeout(followScan, follow[fi++]);
+          } else {
             state.postPoll = null;
           }
-        }, 50);
-        setTimeout(scanAll, 400);
-        setTimeout(scanAll, 1200);
-        setTimeout(scanAll, 3000);
+        }
+        state.postPoll = setTimeout(followScan, follow[fi++]);
       }
       if (state.route === "story" || state.route === "highlights") {
         state.GL_repeat = setInterval(function () {
-          scanAll();
+          try {
+            storyTick();
+          } catch (e) {
+            /* isolated */
+          }
         }, checkInterval);
       }
     },
     cleanup: function () {
       clearInterval(state.GL_repeat);
       state.GL_repeat = null;
-      clearInterval(state.postPoll);
+      clearTimeout(state.postPoll);
       state.postPoll = null;
       clearTimeout(state.homepageObserverDebounce);
+      var now = Date.now();
+      Object.keys(state.GL_payloadCache).forEach(function (k) {
+        var c = state.GL_payloadCache[k];
+        if (!c || now - c.ts > 600000) delete state.GL_payloadCache[k];
+      });
+      // Story/highlight payloads are re-fetchable; keep them for the session
+      // (per-item swipes reuse them) but bound total retention.
+      var dcCount =
+        Object.keys(state.GL_dataCache.stories).length +
+        Object.keys(state.GL_dataCache.highlights).length;
+      if (dcCount > 30) {
+        state.GL_dataCache.stories = {};
+        state.GL_dataCache.highlights = {};
+      }
       if (Object.keys(state.GL_mediaDataCache).length > 200) {
         state.GL_mediaDataCache = {};
       }
     },
     start: function () {
-      setInterval(function () {
-        if (location.href !== state.currentURL || !state.firstStarted || !state.pageLoaded) {
-          state.firstStarted = true;
-          state.currentURL = location.href;
-          Router.enter();
-        }
-      }, 500);
+      // Navigation is delivered by the document-start history hooks
+      // (pushState/replaceState wrappers + popstate/hashchange). Coalesce
+      // bursts (IG fires several mutations per route change) into one enter.
+      var navTimer = null;
+      __ignisOnNavigate = function () {
+        if (navTimer) return;
+        navTimer = setTimeout(function () {
+          navTimer = null;
+          if (location.href !== state.currentURL) Router.enter();
+        }, 60);
+      };
     },
   };

@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name               IGNIS — Instagram Enhancement Suite
-// @version            9.5.3
-// @description        IGNIS v9.5: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) with sane defaults on every media surface.
+// @version            9.6.0
+// @description        IGNIS v9.6: instant high-quality downloads (posts, reels, stories, highlights, HD avatars, DASH video+audio MP4 mux via Mediabunny, captions, EXIF) plus local download statistics and a command palette (Ctrl+K).
 // @author             IGNIS
 // @match              https://*.instagram.com/*
-// @downloadURL        https://cdn.jsdelivr.net/gh/mheci/ignis@main/ignis.user.js
-// @updateURL          https://cdn.jsdelivr.net/gh/mheci/ignis@main/ignis.user.js
+// @downloadURL        https://github.com/mheci/Ignis/releases/latest/download/ignis.user.js
+// @updateURL          https://github.com/mheci/Ignis/releases/latest/download/ignis.user.js
 // @require            https://code.jquery.com/jquery-4.0.0.min.js
 // @require            https://cdn.jsdelivr.net/npm/mediabunny@1.34.5/dist/bundles/mediabunny.min.cjs
 // @grant              GM_addStyle
@@ -29,7 +29,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "9.5.3";
+  const VERSION = "9.6.0";
   const NAME = "IGNIS";
   const $ = jQuery;
 
@@ -46,6 +46,34 @@
     window.focus = __ignisGuardedFocus;
     __ignisFocusTarget.focus = __ignisGuardedFocus;
   } catch (e) {}
+
+  var __ignisOnNavigate = null;
+  function __ignisHandleNavigate() {
+    if (typeof __ignisOnNavigate !== "function") return;
+    try {
+      __ignisOnNavigate();
+    } catch (e) {
+
+    }
+  }
+  try {
+    var __ignisPushState = history.pushState;
+    var __ignisReplaceState = history.replaceState;
+    history.pushState = function () {
+      var r = __ignisPushState.apply(this, arguments);
+      __ignisHandleNavigate();
+      return r;
+    };
+    history.replaceState = function () {
+      var r = __ignisReplaceState.apply(this, arguments);
+      __ignisHandleNavigate();
+      return r;
+    };
+  } catch (e) {
+
+  }
+  window.addEventListener("popstate", __ignisHandleNavigate);
+  window.addEventListener("hashchange", __ignisHandleNavigate);
 
   const SETTINGS = [
     ["AUTO_RENAME", "download", "Auto Rename Files", "Auto-renames downloaded files. Right-click the row to edit the template.", true],
@@ -68,9 +96,11 @@
     ["USE_EXTERNAL_DOWNLOAD_MODE", "download", "Use External Download Mode", "Downloads via the browser download manager (GM_download) instead of in-memory blobs — best for large videos.", false],
     ["KEYBOARD_DOWNLOAD_S", "keyboard", "S Download", "S downloads the focused post.", true],
     ["KEYBOARD_SHORTCUTS_HELP", "keyboard", "Keyboard Shortcuts Help", "Shift+? shows the shortcuts overlay.", true],
+    ["COMMAND_PALETTE", "keyboard", "Command Palette", "Ctrl+K (Cmd+K on Mac, Alt+K anywhere) opens the quick command palette.", true],
+    ["TRACK_DOWNLOAD_STATS", "stats", "Track Download Statistics", "Counts downloads and data volume locally on this device. Nothing ever leaves the browser.", true],
   ];
 
-  const CATS = [["download", "Downloads"], ["keyboard", "Keyboard"]];
+  const CATS = [["download", "Downloads"], ["keyboard", "Keyboard"], ["stats", "Statistics"]];
 
   const USER_SETTING = {};
   const CAT_MAP = {};
@@ -156,6 +186,56 @@
       const raw = this.get(IMAGE_CACHE_KEY, {});
       if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
       return {};
+    },
+  };
+
+  const STATS_KEY = "IGNIS_STATS_V1";
+  const Stats = {
+    _data: null,
+    _blank() {
+      return { v: 1, firstDay: Date.now(), sessions: 0, items: 0, bytes: 0, byType: {}, byDay: {}, lastAt: 0 };
+    },
+    _load() {
+      if (!this._data) {
+        var d = Store.get(STATS_KEY, null);
+        this._data = d && typeof d === "object" && d.v === 1 && d.byType && d.byDay ? d : this._blank();
+      }
+      return this._data;
+    },
+    _save() {
+      try {
+        Store.set(STATS_KEY, this._data);
+      } catch (e) {
+
+      }
+    },
+    session() {
+      var d = this._load();
+      d.sessions++;
+      this._save();
+    },
+    record(type, bytes) {
+      if (!USER_SETTING.TRACK_DOWNLOAD_STATS) return;
+      var d = this._load();
+      var t = String(type || "other");
+      d.items++;
+      d.bytes += Number(bytes) || 0;
+      d.byType[t] = (d.byType[t] || 0) + 1;
+      var day = new Date().toISOString().slice(0, 10);
+      d.byDay[day] = (d.byDay[day] || 0) + 1;
+      d.lastAt = Date.now();
+      var days = Object.keys(d.byDay);
+      if (days.length > 90) {
+        days.sort();
+        days.slice(0, days.length - 90).forEach(function (k) {
+          delete d.byDay[k];
+        });
+      }
+      this._save();
+    },
+    reset() {
+      this._data = this._blank();
+      this._save();
     },
   };
 
@@ -1132,6 +1212,7 @@
             url: downloadLink,
             name: getSaveFileName(downloadLink, metadata),
             onload: function () {
+              Stats.record(metadata.sourceType, 0);
               updateLoadingBar(false);
               resolve(true);
             },
@@ -1290,6 +1371,7 @@
       } else {
         await triggerDownload(object, downloadName);
       }
+      Stats.record(String(metadata.sourceType || "other"), (object && object.size) || 0);
     }
     if (USER_SETTING.DOWNLOAD_WITH_CAPTION && metadata.caption) {
       var captionName = getSaveFileName(
@@ -1300,6 +1382,7 @@
         new Blob([metadata.caption], { type: "text/plain;charset=utf-8" }),
         captionName
       );
+      Stats.record("caption", 0);
     }
   }
 
@@ -1868,6 +1951,14 @@
 .ignis-about a{color:var(--ig-accent);text-decoration:none;font-weight:600}
 .ignis-about .ignis-rt{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .ignis-about .ignis-rt span{background:var(--ig-surface-2);border:1px solid var(--ig-line);border-radius:20px;padding:3px 10px;font:600 11px -apple-system,"Segoe UI",sans-serif;color:var(--ig-text-2)}
+.ignis-stats-h{font:700 11px -apple-system,"Segoe UI",sans-serif;color:var(--ig-text-2);letter-spacing:.6px;text-transform:uppercase;padding:12px 12px 2px}
+.ignis-stat-v{font:600 12px ui-monospace,Menlo,Consolas,monospace;color:var(--ig-text);flex-shrink:0}
+.ignis-palette{position:fixed;inset:0;z-index:2147482600;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
+.ignis-pal-card{width:min(520px,92vw);background:var(--ig-surface);color:var(--ig-text);border-radius:14px;border:1px solid var(--ig-line);box-shadow:var(--ig-shadow);overflow:hidden}
+.ignis-pal-inp{width:100%;box-sizing:border-box;border:none;outline:none;background:transparent;color:var(--ig-text);padding:15px 18px;font:500 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;border-bottom:1px solid var(--ig-line)}
+.ignis-pal-list{max-height:46vh;overflow-y:auto;padding:6px;scrollbar-width:thin}
+.ignis-pal-it{padding:9px 12px;border-radius:9px;font:500 13px -apple-system,"Segoe UI",sans-serif;cursor:pointer}
+.ignis-pal-on{background:var(--ig-surface-2);color:var(--ig-accent)}
 
 .ignis-bar{position:absolute;top:12px;right:12px;z-index:15;display:flex;flex-direction:row-reverse;gap:6px;padding:6px;border-radius:12px;background:rgba(20,20,24,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);box-shadow:0 2px 14px rgba(0,0,0,.25)}
 .ignis-dl,.ignis-nt,.ignis-th,.ignis-da{width:34px;height:34px;border:none;border-radius:9px;background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer;transition:all .12s}
@@ -2175,6 +2266,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
           new Blob([item.caption], { type: "text/plain;charset=utf-8" }),
           getSaveFileName(item.url, capMeta)
         );
+        Stats.record("caption", 0);
       }
     });
   }
@@ -2388,12 +2480,77 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       );
     }
 
+    const STAT_TYPE_LABELS = {
+      post: "Posts",
+      photo: "Photos",
+      video: "Videos",
+      reels: "Reels",
+      stories: "Stories",
+      highlights: "Highlights",
+      thumbnail: "Thumbnails",
+      avatar: "Profile Pictures",
+      caption: "Captions",
+      other: "Other",
+    };
+
+    function formatBytes(n) {
+      n = Number(n) || 0;
+      if (n <= 0) return "0 B";
+      var units = ["B", "KB", "MB", "GB", "TB"];
+      var i = 0;
+      while (n >= 1024 && i < units.length - 1) {
+        n /= 1024;
+        i++;
+      }
+      return (i ? n.toFixed(1) : String(Math.round(n))) + " " + units[i];
+    }
+
+    function statRow(label, value) {
+      return (
+        '<div class="ignis-row"><div class="ignis-row-txt"><div class="ignis-row-lb">' +
+        esc(label) +
+        '</div></div><span class="ignis-stat-v">' +
+        esc(value) +
+        "</span></div>"
+      );
+    }
+
+    function buildStatsPanel(onReset) {
+      var s = Stats._load();
+      var panel = $('<div class="ignis-stats">');
+      panel.append(
+        statRow("Total downloads", String(s.items || 0)),
+        statRow("Data saved (approx.)", formatBytes(s.bytes)),
+        statRow("Sessions", String(s.sessions || 0)),
+        statRow("Tracking since", s.firstDay ? new Date(s.firstDay).toLocaleDateString() : "—"),
+        statRow("Last download", s.lastAt ? new Date(s.lastAt).toLocaleString() : "—")
+      );
+      var types = Object.keys(s.byType || {}).sort(function (a, b) {
+        return s.byType[b] - s.byType[a];
+      });
+      if (types.length) {
+        panel.append('<div class="ignis-stats-h">By type</div>');
+        types.forEach(function (t) {
+          panel.append(statRow(STAT_TYPE_LABELS[t] || t, String(s.byType[t])));
+        });
+      }
+      panel.append(
+        '<div style="padding:10px 12px"><button class="ignis-btn ignis-btn-sec">Reset statistics</button></div>'
+      );
+      panel.find("button").on("click", function () {
+        Stats.reset();
+        Toasts.success("Statistics reset.");
+        if (onReset) onReset();
+      });
+      return panel;
+    }
+
     function buildList(filter) {
       list.empty();
       if (state._igTab === "about") {
         list.append(
           '<div class="ignis-about"><b>' + NAME + " v" + VERSION + '</b> — clean download-focused build.<div class="ignis-rt">' +
-            ["Ignis Core", "Ignis Lens", "Ignis Forge", "Ignis Render"]
+            ["Ignis Core", "Ignis Lens", "Ignis Forge", "Ignis Render", "Ignis Pulse"]
               .map(function (r) {
                 return "<span>" + esc(r) + "</span>";
               })
@@ -2405,6 +2562,11 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       if (state._igTab === "keyboard") {
         renderHotkeyEditor(list);
         return;
+      }
+      if (state._igTab === "stats") {
+        list.append(buildStatsPanel(function () {
+          buildList(filter);
+        }));
       }
       Object.keys(CAT_MAP)
         .filter(function (k) {
@@ -3313,6 +3475,24 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     }
   }
 
+  function storyTick() {
+
+    var isHl = state.route === "highlights";
+    var btnSel = isHl ? ".ignis-hd" : ".ignis-sd";
+    if (!$(btnSel).length) {
+      if (isHl) attachHighlightButtons();
+      else attachStoryButtons();
+    }
+    var $host = $(btnSel).first().parent();
+    if (!$host.length) return;
+    if ($host.find("video").length) {
+      if (isHl) attachHighlightThumbnailButton();
+      else attachStoryThumbnailButton();
+    }
+    var u = (isHl ? getHighlightsStoryUsername : getStoryUsername)();
+    if (u) setStoryProgressIndexText($host, isHl ? "ignis-hp-pos" : "ignis-sp-pos", u);
+  }
+
   function scanAll() {
     if (!state.pageLoaded) return;
     function safe(fn) {
@@ -3349,16 +3529,29 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     scanScheduled = true;
     setTimeout(function () {
       scanScheduled = false;
+
+      if (state.firstStarted && (!state.pageLoaded || location.href !== state.currentURL)) {
+        Router.enter();
+        return;
+      }
       scanAll();
     }, 150);
   }
 
   let domObserver = null;
+  let domObserverRoot = null;
   function installDomObserver() {
     if (domObserver) domObserver.disconnect();
     var mount = document.querySelector('div[id^="mount"]') || document.body;
-    domObserver = new MutationObserver(function () {
-      scheduleScan();
+    domObserverRoot = mount;
+    domObserver = new MutationObserver(function (muts) {
+
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].addedNodes && muts[i].addedNodes.length) {
+          scheduleScan();
+          return;
+        }
+      }
     });
     domObserver.observe(mount, { childList: true, subtree: true });
   }
@@ -3474,6 +3667,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
   const Router = {
     enter: function () {
       state.firstStarted = true;
+      state.currentURL = location.href;
       state.route = null;
       var path = location.pathname;
       var blacklist =
@@ -3507,53 +3701,76 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       }
       state.pageLoaded = true;
       this.cleanup();
+
+      if (!domObserver || !domObserverRoot || !domObserverRoot.isConnected) {
+        installDomObserver();
+      }
       try {
         scanAll();
       } catch (e) {
         logger("router scan error:", e && e.message ? e.message : e);
       }
       if (state.route === "home" || state.route === "explore" || state.route === "post") {
-        var pollCalls = 0;
-        state.postPoll = setInterval(function () {
-          pollCalls++;
+
+        var follow = [400, 1000, 2500];
+        var fi = 0;
+        function followScan() {
           try {
             scanAll();
           } catch (e) {
 
           }
-          if (pollCalls >= 100 || document.querySelector(".ignis-bar, .ignis-gd")) {
-            clearInterval(state.postPoll);
+          if (fi < follow.length && !document.querySelector(".ignis-bar, .ignis-gd")) {
+            state.postPoll = setTimeout(followScan, follow[fi++]);
+          } else {
             state.postPoll = null;
           }
-        }, 50);
-        setTimeout(scanAll, 400);
-        setTimeout(scanAll, 1200);
-        setTimeout(scanAll, 3000);
+        }
+        state.postPoll = setTimeout(followScan, follow[fi++]);
       }
       if (state.route === "story" || state.route === "highlights") {
         state.GL_repeat = setInterval(function () {
-          scanAll();
+          try {
+            storyTick();
+          } catch (e) {
+
+          }
         }, checkInterval);
       }
     },
     cleanup: function () {
       clearInterval(state.GL_repeat);
       state.GL_repeat = null;
-      clearInterval(state.postPoll);
+      clearTimeout(state.postPoll);
       state.postPoll = null;
       clearTimeout(state.homepageObserverDebounce);
+      var now = Date.now();
+      Object.keys(state.GL_payloadCache).forEach(function (k) {
+        var c = state.GL_payloadCache[k];
+        if (!c || now - c.ts > 600000) delete state.GL_payloadCache[k];
+      });
+
+      var dcCount =
+        Object.keys(state.GL_dataCache.stories).length +
+        Object.keys(state.GL_dataCache.highlights).length;
+      if (dcCount > 30) {
+        state.GL_dataCache.stories = {};
+        state.GL_dataCache.highlights = {};
+      }
       if (Object.keys(state.GL_mediaDataCache).length > 200) {
         state.GL_mediaDataCache = {};
       }
     },
     start: function () {
-      setInterval(function () {
-        if (location.href !== state.currentURL || !state.firstStarted || !state.pageLoaded) {
-          state.firstStarted = true;
-          state.currentURL = location.href;
-          Router.enter();
-        }
-      }, 500);
+
+      var navTimer = null;
+      __ignisOnNavigate = function () {
+        if (navTimer) return;
+        navTimer = setTimeout(function () {
+          navTimer = null;
+          if (location.href !== state.currentURL) Router.enter();
+        }, 60);
+      };
     },
   };
 
@@ -3648,6 +3865,8 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     }
     var rows = [
       ["S", "Download focused post"],
+      [getPlatformModifierKey() + " + K", "Command palette"],
+      [(isMacOS() ? "\u2318" : "Ctrl") + " + K", "Command palette (browser-safe)"],
       ["Shift + ?", "Show / hide this overlay"],
       [getPlatformModifierKey() + " + W", "Settings"],
       [getPlatformModifierKey() + " + S", "Download story"],
@@ -3698,6 +3917,123 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     });
   }
 
+  function toggleCommandPalette() {
+    var existing = document.querySelector(".ignis-palette");
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    var actions = [
+      { label: "Open Settings", kw: "settings preferences options", fn: function () { showSetting(); } },
+      { label: "Download Statistics", kw: "stats usage numbers", fn: function () { showSetting("stats"); } },
+      { label: "About " + NAME, kw: "about version info", fn: showAbout },
+      { label: "Debug Window", kw: "debug logs console", fn: showDebugDOM },
+      { label: "Download Focused Post", kw: "save post quick download", fn: quickDownloadFocusedPost },
+      {
+        label: "Download Current Story",
+        kw: "save story download",
+        fn: function () {
+          if (state.route === "story") $(".ignis-sd").first().trigger("click");
+          else Toasts.info("Open a story first.");
+        },
+      },
+      { label: "Download All Stories", kw: "save story all batch", fn: function () { downloadStoriesAll("stories"); } },
+      { label: "Keyboard Shortcuts", kw: "shortcuts help keys overlay", fn: toggleShortcutsHelp },
+      { label: "Close Dialogs", kw: "close modals dismiss", fn: function () { ModalStack.closeTop(); } },
+      { label: "Reload " + NAME, kw: "reload restart refresh", fn: reloadScript },
+    ];
+    var wrap = $('<div class="ignis-palette">');
+    var card = $('<div class="ignis-pal-card">');
+    var inp = $('<input class="ignis-pal-inp" type="text" placeholder="Type a command…" spellcheck="false">');
+    var listBox = $('<div class="ignis-pal-list">');
+    var shown = actions.slice();
+    var active = 0;
+    function paint() {
+      listBox.children(".ignis-pal-it").each(function (i) {
+        $(this).toggleClass("ignis-pal-on", i === active);
+      });
+      var el = listBox.children(".ignis-pal-on")[0];
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+    }
+    function render(q) {
+      q = (q || "").trim().toLowerCase();
+      shown = actions.filter(function (a) {
+        return !q || a.label.toLowerCase().indexOf(q) > -1 || a.kw.indexOf(q) > -1;
+      });
+      active = 0;
+      listBox.empty();
+      if (!shown.length) {
+        listBox.append('<div class="ignis-empty" style="padding:18px">No matching commands.</div>');
+        return;
+      }
+      shown.forEach(function (a, i) {
+        var it = $('<div class="ignis-pal-it" role="button" tabindex="-1">').text(a.label);
+        it.on("mouseenter", function () {
+          active = i;
+          paint();
+        });
+        it.on("click", function () {
+          close();
+          a.fn();
+        });
+        listBox.append(it);
+      });
+      paint();
+    }
+    function close() {
+      wrap.remove();
+      $(document).off("keydown.igpal");
+    }
+    inp.on("input", function () {
+      render(inp.val());
+    });
+    wrap.on("mousedown", function (e) {
+      if (e.target === wrap[0]) close();
+    });
+    card.append(inp, listBox);
+    wrap.append(card);
+    $body.append(wrap);
+    $(document).on("keydown.igpal", function (e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (shown.length) {
+          active = (active + 1) % shown.length;
+          paint();
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (shown.length) {
+          active = (active - 1 + shown.length) % shown.length;
+          paint();
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        var a = shown[active];
+        close();
+        if (a) a.fn();
+      }
+    });
+    render("");
+    setTimeout(function () {
+      inp.trigger("focus");
+    }, 0);
+  }
+
+  function installCommandPalette() {
+    document.addEventListener("keydown", function (e) {
+      if (!USER_SETTING.COMMAND_PALETTE) return;
+      var tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target && e.target.isContentEditable)) return;
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        toggleCommandPalette();
+      }
+    });
+  }
+
   function installAltHotkeys() {
     $(window).on("keydown.igAlt", function (e) {
       var tag = (e.target && e.target.tagName) || "";
@@ -3713,6 +4049,9 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
       } else if (code === state.debugHotkeyKeyCode) {
         e.preventDefault();
         showDebugDOM();
+      } else if (code === 75) {
+        e.preventDefault();
+        toggleCommandPalette();
       } else if (code === 82) {
         e.preventDefault();
         reloadScript();
@@ -3728,11 +4067,11 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
   function reloadScript() {
     clearInterval(state.GL_repeat);
     state.GL_repeat = null;
-    clearInterval(state.postPoll);
+    clearTimeout(state.postPoll);
     state.postPoll = null;
     $body.off(".ignisEvents");
     state.bodyEventsRegistered = false;
-    $(".ignis-bar, .ignis-sb, .ignis-sb-pos, .ignis-pd, .ignis-ksh, .ignis-gd").remove();
+    $(".ignis-bar, .ignis-sb, .ignis-sb-pos, .ignis-pd, .ignis-ksh, .ignis-palette, .ignis-gd").remove();
     $(".ignis-modal").remove();
     $("[data-snig]").removeAttr("data-snig");
     state.pageLoaded = false;
@@ -3770,6 +4109,7 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     }
     add("Settings", "w", showSetting);
     add("Hotkey Settings", "q", showHotkeySetting);
+    add("Command Palette", "k", toggleCommandPalette);
     add("About " + NAME, "i", showAbout);
     add("Debug Window", "z", showDebugDOM);
     add("Reload Script", "r", reloadScript);
@@ -3779,11 +4119,13 @@ a:hover>.ignis-gd,.ignis-gd:focus-visible,.ignis-gd:hover{opacity:1;transform:sc
     $body = $("body");
     initSettings();
     purgeCache();
+    Stats.session();
     registerMenuCommand();
     registerBodyHandlers();
     registerPerformanceObserver();
     installKeyboardShortcuts();
     installAltHotkeys();
+    installCommandPalette();
 
     Router.start();
     Router.enter();

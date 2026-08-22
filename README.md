@@ -12,18 +12,14 @@ A fast, self-contained userscript for high-quality Instagram media downloads.
 Install the userscript in Tampermonkey / Violentmonkey / Greasemonkey:
 
 ```
-https://cdn.jsdelivr.net/gh/mheci/ignis@main/ignis.user.js
+https://github.com/mheci/Ignis/releases/latest/download/ignis.user.js
 ```
 
-or from the raw GitHub file:
-
-```
-https://raw.githubusercontent.com/mheci/ignis/main/ignis.user.js
-```
+This is the permanent "latest release" link — it always serves the newest stable build.
 
 ### Updates
 
-The script declares `@updateURL` / `@downloadURL` pointing at this repository, so your userscript manager checks for new versions automatically (jsDelivr CDN, cached). Version bumps are detected by comparing the `@version` header; there is no auto-install — the manager prompts you.
+The script declares `@updateURL` / `@downloadURL` pointing at the `releases/latest/download` link above, so your userscript manager checks for new versions automatically. Version bumps are detected by comparing the `@version` header; there is no auto-install — the manager prompts you.
 
 ## Features
 
@@ -36,6 +32,8 @@ The script declares `@updateURL` / `@downloadURL` pointing at this repository, s
 - Direct download modes (all / visible resource) without dialogs
 - External download mode via `GM_download` for very large files
 - Configurable filename templates
+- Local download statistics dashboard (Settings → Statistics): totals, data volume, per-type breakdown — stored only in your browser
+- Command palette (`Ctrl+K`, `Cmd+K` on Mac, or `Alt+K`) for quick access to every action
 - Keyboard: `S` download focused post, `Shift+?` shortcuts, `Alt+W` settings, `Alt+S` download story, `Alt+Z` debug, `Alt+R` reload
 
 ## Settings

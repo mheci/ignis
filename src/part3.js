@@ -75,6 +75,7 @@
             url: downloadLink,
             name: getSaveFileName(downloadLink, metadata),
             onload: function () {
+              Stats.record(metadata.sourceType, 0);
               updateLoadingBar(false);
               resolve(true);
             },
@@ -233,6 +234,7 @@
       } else {
         await triggerDownload(object, downloadName);
       }
+      Stats.record(String(metadata.sourceType || "other"), (object && object.size) || 0);
     }
     if (USER_SETTING.DOWNLOAD_WITH_CAPTION && metadata.caption) {
       var captionName = getSaveFileName(
@@ -243,6 +245,7 @@
         new Blob([metadata.caption], { type: "text/plain;charset=utf-8" }),
         captionName
       );
+      Stats.record("caption", 0);
     }
   }
 
